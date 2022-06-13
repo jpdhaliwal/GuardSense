@@ -1,0 +1,305 @@
+#Importing the various libraries required for the code to run
+
+import gspread
+import RPi.GPIO as GPIO
+import drivers
+import random 
+from time import sleep
+from datetime import datetime, timedelta
+from oauth2client.service_account import ServiceAccountCredentials
+
+
+
+#Setting up google sheets API
+
+scope = ['https://spreadsheets.google.com/feeds', 
+        'https://www.googleapis.com/auth/drive']
+creds = ServiceAccountCredentials.from_json_keyfile_name('/home/pi/Desktop/LiterallyAnything/Credentials.json', scope)
+client = gspread.authorize(creds)
+global sheet
+sheet=client.open("Jashanpreet")
+
+
+
+#Setting up general purpose input/output pins (GPIO pins) for the pressure pad, buttons and peizo buzzer
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setwarnings(False)
+GPIO.setup(10, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(7, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(8, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(11, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(12, GPIO.OUT)
+
+
+
+#Setting up the LCD display
+
+display = drivers.Lcd()
+
+
+#Defining a function which will run the first activity when executed
+#In this first activity the user will be given instructions on the lcd display
+#In this activity the user gets a limited time to punch/kick/hit the target as many times possible
+#This score is then stored on a google sheets file and stats are displayed onto the lcd display (latest score, best score, average score)
+
+def activity1():
+    
+
+
+    #The first block of code opens the correct page of the google sheet and display the instructions on the lcd display
+
+    display.lcd_clear()
+    worksheet = sheet.get_worksheet(0)
+    dataPosition1 = worksheet.cell(2, 3).value
+    hitCounter = 0
+    display.lcd_display_string("Activity 1", 1)
+    display.lcd_display_string("In this activity", 2)
+    sleep(1)
+    display.lcd_display_string("try to hit the  ", 2)
+    sleep(1)
+    display.lcd_display_string("target as many  ", 2)
+    sleep(1)
+    display.lcd_display_string("times possible  ", 2)
+    sleep(1)
+    display.lcd_display_string("in 30 seconds.  ", 2)
+    sleep(1)
+    display.lcd_display_string("Begin           ", 2)
+    sleep(1)
+    display.lcd_clear()
+    display.lcd_display_string("Times Hit:", 1)
+    
+
+
+    #This block of code is the activity and uses while loop and if statements to work
+    #The while loop uses the time library to run for only a certain amount of time (30 seconds)
+    #Inside the while loop there is a counter which increases everytime there is a signal coming from the pressure pad
+
+    end_time = datetime.now() + timedelta(seconds = 30)
+    while datetime.now() < end_time:
+        display.lcd_display_string(str(hitCounter), 2)
+        sleep(0.25)
+        if GPIO.input(7) == GPIO.HIGH:
+            hitCounter += 1
+    display.lcd_clear()
+    
+
+
+    #This block of code updates the information on the spreadsheet and displays the latest score, best score and average score on the lcd display
+
+    worksheet.update_cell(dataPosition1, 1, hitCounter)
+    dataPosition1 = int(dataPosition1)
+    dataPosition1 += 1
+    worksheet.update_cell(2, 3, dataPosition1)
+    display.lcd_display_string("Final Score:    ", 1)
+    display.lcd_display_string(str(hitCounter), 2)
+    sleep(3)
+    bestScore = worksheet.cell(2, 6).value
+    display.lcd_display_string("Best Score:     ", 1)
+    display.lcd_display_string(bestScore, 2)
+    sleep(3)
+    avgScore = worksheet.cell(3, 6).value
+    display.lcd_display_string("Avg Score:     ", 1)
+    display.lcd_display_string(avgScore, 2)
+    sleep(3)
+    display.lcd_clear()
+
+
+
+
+#Defining a function which will run the second activity when executed
+#In this second activity the user will be given instructions on the lcd display
+#In this activity the user will measure their reaction time by hitting the target as soon as the buzzer beeps
+#This score is then stored on a google sheets file and stats are displayed onto the lcd display (latest score, best score, average score)
+
+def activity2():
+
+
+
+    #The first block of code opens the correct page of the google sheet and display the instructions on the lcd display
+
+    display.lcd_clear()
+    worksheet = sheet.get_worksheet(1)
+    dataPosition2 = worksheet.cell(2, 3).value
+    display.lcd_display_string("Activity 2", 1)
+    display.lcd_display_string("In this activity", 2)
+    sleep(1)
+    display.lcd_display_string("try to hit the  ", 2)
+    sleep(1)
+    display.lcd_display_string("target as fast  ", 2)
+    sleep(1)
+    display.lcd_display_string("as possible when", 2)
+    sleep(1)
+    display.lcd_display_string("the peizo sounds", 2)
+    sleep(1)
+    display.lcd_display_string("Begin           ", 2)
+    sleep(1)
+    display.lcd_clear()
+    sleep(2)
+    
+
+
+    #This block of code is the activity and uses while loop and if statements to work
+    #The while loop uses the time library to run for only a certain amount of time (3 seconds)
+    #Inside the while loop there is an if statement which checks for an input from the pressure sensor and sets a time for it
+    #There is also an output signal which turns the peizo buzzer on and off 
+
+    end_time = datetime.now() + timedelta(seconds = 3)
+    initialTime = datetime.now()
+    finalTime = 0
+    GPIO.output(12, GPIO.HIGH)
+    sleep(0.2)
+    GPIO.output(12, GPIO.LOW)
+    while datetime.now() < end_time:
+        if GPIO.input(7) == GPIO.HIGH:
+            finalTime = datetime.now()
+            sleep(0.25)
+            
+
+
+    #This block of code updates the information on the spreadsheet and displays the latest score, best score and average score on the lcd display
+    #This block also makes some calculations using the results from the previous block of code to find out the reaction time which would be the activity's score
+
+    sleep(1)
+    timeTaken = finalTime - initialTime
+    timeTaken = str(timeTaken)
+    timeTaken = timeTaken.replace(":", "0")
+    worksheet.update_cell(dataPosition2, 1, timeTaken)
+    dataPosition2 = int(dataPosition2)
+    dataPosition2 += 1
+    worksheet.update_cell(2, 3, dataPosition2)
+    display.lcd_display_string("Reaction time:  ", 1)
+    display.lcd_display_string(str(timeTaken), 2)
+    sleep(3)
+    bestScore = worksheet.cell(2, 6).value
+    display.lcd_display_string("Best Score:     ", 1)
+    display.lcd_display_string(bestScore, 2)
+    sleep(3)
+    avgScore = worksheet.cell(3, 6).value
+    display.lcd_display_string("Avg Score:      ", 1)
+    display.lcd_display_string(avgScore, 2)
+    sleep(3)
+    display.lcd_clear()
+    
+    
+
+#Defining a function which will run the third activity when executed
+#In this third activity the user will be given instructions on the lcd display
+#In this activity there will be beeps at random times which the user will have time their hits with in order to secure a point
+#This score is then stored on a google sheets file and stats are displayed onto the lcd display (latest score, best score, average score)
+    
+def activity3():
+
+
+
+    #The first block of code opens the correct page of the google sheet and display the instructions on the lcd display
+
+    display.lcd_clear()
+    worksheet = sheet.get_worksheet(2)
+    dataPosition3 = worksheet.cell(2, 3).value
+    display.lcd_display_string("Activity 3", 1)
+    display.lcd_display_string("In this activity", 2)
+    sleep(1)
+    display.lcd_display_string("try to hit the  ", 2)
+    sleep(1)
+    display.lcd_display_string("target whenever ", 2)
+    sleep(1)
+    display.lcd_display_string("the peizo sounds", 2)
+    sleep(1)
+    display.lcd_display_string("which will be at", 2)
+    sleep(1)
+    display.lcd_display_string("random times for", 2)
+    sleep(1)
+    display.lcd_display_string("60 seconds      ", 2)
+    sleep(1)
+    display.lcd_display_string("Begin           ", 2)
+    sleep(1)
+    display.lcd_clear()
+    sleep(2)
+    display.lcd_display_string("Times Hit:", 1)
+    
+
+
+    #This block of code is the activity and uses while loop and if statements to work
+    #The while loop uses the time library to run for only a certain amount of time (60 seconds) and there is another while loop which checks for a hit after the buzzer goes off which will only run for half a second (0.5 seconds)
+    #Inside the second while loop there is an if statement which checks for an input from the pressure sensor and adds a value of 1 to the counter for successful hits
+    #There is also an output signal which turns the peizo buzzer on and off 
+
+    successfulHits = 0
+    totalChances = 0
+    display.lcd_display_string(str(successfulHits), 2)
+    end_time = datetime.now() + timedelta(seconds = 60)
+    while datetime.now() < end_time:
+        sleep(random.randrange(2, 7))
+        totalChances += 1.0
+        GPIO.output(12, GPIO.HIGH)
+        sleep(0.2)
+        GPIO.output(12, GPIO.LOW)
+        finish_time = datetime.now() + timedelta(seconds = 0.5)
+        while datetime.now() < finish_time:
+            if GPIO.input(7) == GPIO.HIGH:
+                successfulHits += 1.0
+                display.lcd_display_string(str(successfulHits), 2)
+                sleep(0.25)
+
+
+
+    #This block of code updates the information on the spreadsheet and displays the latest score, best score and average score on the lcd display
+    #This block also makes some calculations using the results from the previous block of code to find out the success rate of the user which would be the activity's score
+
+    display.lcd_clear()
+    successRate = (successfulHits/totalChances)*100
+    worksheet.update_cell(dataPosition3, 1, successRate)
+    successRate = worksheet.cell(dataPosition3, 1).value
+    dataPosition3 = int(dataPosition3)
+    dataPosition3 += 1
+    worksheet.update_cell(2, 3, dataPosition3)
+    display.lcd_display_string("Final Score:    ", 1)
+    display.lcd_display_string(str(successRate) + "%", 2)
+    sleep(3)
+    bestScore = worksheet.cell(2, 6).value
+    display.lcd_display_string("Best Score:     ", 1)
+    display.lcd_display_string(bestScore, 2)
+    sleep(3)
+    avgScore = worksheet.cell(3, 6).value
+    display.lcd_display_string("Avg Score:      ", 1)
+    display.lcd_display_string(avgScore, 2)
+    sleep(3)
+    display.lcd_clear()
+    
+    
+
+#This block of code is what is actually being run 
+#The next 2 blocks use the try and except functions
+#The code in the try funtion just simply runs
+#In this case the code is just a while loop that constantly runs so it is always going to be checking for the if statements
+#Each if statement is simply looking for an input from 1 of 3 buttons and if the condition is met one of the functions created above will run
+
+try:
+    display.lcd_clear()
+    while True:
+        display.lcd_display_string("Choose Activity ", 1)
+        
+        if GPIO.input(10) == GPIO.HIGH:
+            activity1()
+
+        if GPIO.input(8) == GPIO.HIGH:
+            activity2()
+            
+        if GPIO.input(11) == GPIO.HIGH:
+            activity3()
+            
+            
+#The except function interrupts the try function and the code in it and the code then moves on to what is in the except function 
+#In this case the condition required to activate the except function is KeyboardInterrupt meaning whenever there is an input of ctrl + c in the terminal the code running in the try function will be stopped and we will continue on to the code in the except funciton
+#In this function the lcd display will simply display "turning off" signaling that the code has finished and the code will end after clearing the lcd display
+            
+except KeyboardInterrupt:
+    display.lcd_clear()
+    display.lcd_display_string("Turning Off     ", 1)
+    sleep(2)
+    display.lcd_clear()
+    
+
+
+
